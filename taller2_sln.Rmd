@@ -1,0 +1,40 @@
+---
+title: "Modelación lineal"
+author: Cristian Gañan, Valentina Ruiz, Maria Isabel Vasquez, Tatiana Marin, Daniel Marin, Marlon Tejada
+date: ""
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+  
+```{r}
+library(tidyverse)
+datos<- read.table("Bosque_deg.txt")
+datos<- datos %>% mutate(V1= as.numeric(V1), V2= as.numeric(V2),
+                         V3= as.factor(V3),V4= as.numeric(V4),
+                         V5= as.numeric(V5)) %>% 
+  rename(dap= V1, Alt= V2, ps= V3, edad= V4, Vol= V5)
+
+ggplot(datos, mapping = aes(x = dap, y = Alt+edad+Vol)) +
+  geom_point() + facet_wrap(~ps, nrow = 2)
+
+ggplot(datos, mapping = aes(x = dap+Alt, y = edad+Vol)) +
+  geom_point() + facet_wrap(~ps, nrow = 2)
+
+ggplot(datos, mapping = aes(x = dap, y = Alt+Vol)) +
+  geom_point() + facet_wrap(~ps, nrow = 2)
+
+```
+
+```{r}
+pairs(dap ~ Alt+Vol+edad, data = datos)
+```
+
+
+
+
+
+
