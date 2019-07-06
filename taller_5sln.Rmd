@@ -1,0 +1,233 @@
+---
+title: "Modelos forestales"
+author: "Cristian Gañan"
+date: ""
+output: 
+  html_document:
+    toc: true
+    df_print: paged
+    highlight: tango
+    theme: paper
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+# Modelos {.tabset .tabset-fade .tabset-pills}
+
+Con los siguientes datos de P. patula, explorar modelos para estimarlo, como los modelos de vB, Schumacher y Chapman-Richards. De acuerdo con los criterios que usted juzgue necesarios, escoja la mejor opción. Trate de buscar usted sus valores de partida con algún razonamiento lógico, o que usted conozca o con modelos que le ofrezca la literatura.
+
+## Von Bertalanffy
+
+```{r, fig.cap= "**Figura 1: Modelo VB**"}
+library(tidyverse)
+datos<- read.csv2("taller5.csv", dec = ".")
+datos<- datos %>% select(-ï..)
+
+library(FSA)
+part<- vbStarts(hd ~ edad, data = datos)
+
+modelo<- nls(hd ~ Linf*(1-exp(-K*(edad-t0))), data = datos,
+             start = part)
+
+
+fitPlot(modelo)
+
+library(nlstools)
+limp<- nlsBoot(modelo, niter = 200)
+
+confint(limp,plot=TRUE,cex.lab=1.5,cex.axis=1.5,cex.main=1.5,main="Interv parametros")
+
+htest(limp,"K",0.24,"less")
+
+```
+
+```{r}
+broom::tidy(modelo)
+broom::glance(modelo)
+```
+**Tabla 1: modelo VB**
+
+
+En la **figura 1**, se puede observar el ajuste del modelo, al parecer ajusta bien los datos, sin embargo, al observar las distribuciones de los parámetros `Linf`, `K` y $t_0$ solo este último sigue una distribución normal, el `p-value` para `k` es significativo lo que quiere decir que k es una buena estimación como se dio por el modelo.
+
+Ahora se hace preciso, mirar cómo se comporta el modelo si se separa por localidad, para esto, se usa la variable `loc` de los datos.
+
+```{r}
+dato1<- datos %>% group_by(loc) %>%  nest()
+
+modelo<- function(data){
+  part<- vbStarts(hd ~ edad, data = data)
+  nls(hd ~ Linf*(1-exp(-K*(edad-t0))), data = data,
+             start = part)
+}
+
+dato1<- dato1 %>% 
+  mutate(model= map(data, modelo))
+
+
+model2<- dato1 %>%  
+  mutate(model2= map(model, broom::tidy)) %>% 
+  unnest(model2, .drop = TRUE)
+
+model2
+
+model3<- dato1 %>%  
+  mutate(model3= map(model, broom::glance)) %>% 
+  unnest(model3, .drop = TRUE)
+
+model3
+
+```
+**Tabla 2: modelos por localidad**
+
+
+Haciendo modelos separados por localidad hay un mejor ajuste, muestra de ello es la `devience` más pequeña en ambos modelos por `sitio` que en los datos completos el mismo patrón lo sigue el `AIC` y el `BIC` **Tabla 1** y **Tabla 2**
+
+
+## Schumacher
+El modelo presentado es de la forma $\beta_{1} \ * e^{\beta_2^{t^{-1}}}$, haciendo manipulaciones matemáticas se pueden encontrar los parámetros $\beta_1$ y $\beta_2$ como sigue:
+
+$$H= \ \beta_1 \ * e^{\beta_2{t^-1}}$$ se aplica $ln$  ambos lados de la ecuación.
+
+$$ln(H) = ln(\beta_1) \ + \frac{1}{t} \ * \beta_2$$
+De aquí es fácil deducir, que la estimación de los parámetros se puede llevar a cabo mediante una regresión lineal de la forma: $ln(hd) = ln(\beta_1) \ + \frac{1}{edad} \ * \beta_2$:
+
+
+```{r}
+param<- lm(log(hd) ~ I(1/edad), data= datos) 
+broom::tidy(param)
+```
+**Tabla 3 Parametros del modelo Schumacher**
+
+Realmente lo importante en la **Tabla 3** es la columna `estimate` pues son los parámetros del modelo `Schumacher`($intercept= \ \beta_1$, $\frac{1}{edad} \ = \beta_{2}$) iniciales. 
+
+Aquí es importante recordar que el modelo lineal es: $ln(hd) = ln(\beta_1) \ + \frac{1}{edad} \ * \beta_2$ donde $\beta_1 \ 	\neq ln(\beta_1)$ pero si $\beta_1 \ 	= e^{ln(\beta_1)}$.
+
+
+```{r}
+schu<- nls(hd ~ a*exp(b*(1/edad)), data = datos, start = list(a= exp(3.041847), b= -5.337759)) 
+
+broom::tidy(schu)
+broom::glance(schu)
+
+```
+**Tabla 4: Modelo Schumacher**
+
+Los parámetros son significativos en el modelo, además, según las **figuras 2 y 3** es un buen ajuste del modelo las distribuciones de $\beta_1$ y $\beta_2$ son tienden a ser normales, también los errores no parecen ser heterocedásticos, sin embargo, en la **Figura 4** se observan posibles datos remotos, pero para este caso esos, podrían representar un sitio específico con características particulares.
+
+```{r, fig.cap= "**Figura 2: Modelo Schumacher**"}
+fitPlot(schu)
+```
+
+
+```{r, fig.cap= "**Figura 3: Distribución de los parametros del modelo**"}
+limp<- nlsBoot(schu, niter = 200)
+
+confint(limp,plot=TRUE,cex.lab=1.5,cex.axis=1.5,cex.main=1.5,main="Interv parametros")
+
+htest(limp,"a",0.24,"less")
+```
+
+
+```{r, fig.cap= "**Figura 4: Residuales del modelo Schumacher**"}
+broom::augment(schu) %>% ggplot(data = ., mapping = aes(x= .fitted, y= .resid)) + geom_point() + geom_abline(slope = 0, color= "red")
+```
+
+Si se comparan los modelos de `Schumacher` y `Von Bertalanffy` es posible deducir atreves de sus `deviance` que para $devience(Schumacher)\  > deviance(Von Bertalanffy)$ esto mismo pasa para $AIC$ y este mismo comportamiento con `AIC` y `BIC` lo que sugiere que para los datos el mejor ajuste lo brinda `Von Bertalanffy` (**Tabla 1** y **Tabla 4**).
+
+Se quiere ahora, mirar como se comporta el modelo separado por localidad:
+
+
+
+```{r}
+dato1<- datos %>% group_by(loc) %>%  nest()
+
+modelo<- function(data){
+  
+  param<- lm(log(hd) ~ I(1/edad), data= data) 
+  nls(hd ~ a*exp(b*(1/edad)), data = data, start = list(a= exp(coefficients(param)[1]), b= coefficients(param)[2]))
+}
+
+dato1<- dato1 %>% 
+  mutate(model= map(data, modelo))
+
+
+model2<- dato1 %>%  
+  mutate(model2= map(model, broom::tidy)) %>% 
+  unnest(model2, .drop = TRUE)
+
+model2
+
+model3<- dato1 %>%  
+  mutate(model3= map(model, broom::glance)) %>% 
+  unnest(model3, .drop = TRUE)
+
+model3
+```
+**Tabla 5: Modelo por localidad Schumacher**
+
+El modelo por localidad ajusta mejor, que sin separarlo, pues al comparar `devience`, `AIC` y `BIC` de los modelos por localidad y sin separar es mas alto el resultado en este ultimo. Tambien si se hace comparaciónes entre los modelos por localidad de `Schumacher` y `Von Bertalanffy` se nota el mismo patron observado en los modelos sin separación, $deviance \hat \ AIC \hat \ BIC(Schumacher) > deviance \hat \ AIC \hat \ BIC(Von Bertalanffy)$, es decir, el modelo `Von Bertalanffy` es el que mejor se ajusta tambien en modelos por localidad. (**Tabla 2** y **Tabla 5**)
+
+
+## Chapman-Richards 
+
+El modelo de la forma $hd= \ \beta_1[1-e^{-\beta_2*edad}]^ {\beta_3}$ se estimó con la ayuda de la literatura, pues es un poco complicado hallar los parámetros, en varios textos la modelación de `altura` y `edad` aparecen valores del orden $A = 83, k = 0.03, p = 4$ por lo cual se intentó a partir de esto hallar parámetros para el modelo.
+
+```{r, fig.cap= "**Figura 5: Modelo Chapman-Richards**"}
+pr<- lm(log(hd) ~ edad, data = datos)
+
+broom::tidy(pr)
+
+exp(log(6.3)/(1.89263315+(0.04615031*3.2)))
+
+library(nlme)
+library(nls2)
+library(minpack.lm)
+library(robustbase)
+library(minpack.lm)
+
+mol<- nlsLM(hd ~ a*(1-exp(-d*edad))^b, data = datos, start = list(a = 30, d = 0.002, b = 0.064))
+
+broom::tidy(mol)
+broom::glance(mol)
+
+broom::augment(mol) %>% ggplot(data = ., mapping = aes(x= hd, y= .fitted)) +
+  geom_point() + geom_smooth(se= FALSE)
+```
+
+```{r}
+dato1<- datos %>% group_by(loc) %>%  nest()
+
+modelo<- function(data){
+  nlsLM(hd ~ a*(1-exp(-d*edad))^b, data = data, start = list(a = 30, d = 0.002, b = 0.064))
+}
+
+dato1<- dato1 %>% 
+  mutate(model= map(data, modelo))
+
+
+
+model2<- dato1 %>%  
+  mutate(model2= map(model, broom::tidy)) %>% 
+  unnest(model2, .drop = TRUE)
+
+model2
+
+model3<- dato1 %>%  
+  mutate(model3= map(model, broom::glance)) %>% 
+  unnest(model3, .drop = TRUE)
+
+model3
+```
+
+Al realizar la comparación entre los modelos propuestos por localidades, a partir de los valores obtenidos para el AIC, el BIC y la deviance, se concluye que el modelo que representa un mejor ajuste es el modelo de Von Bertalanffy, puesto que para las localidades es el que registra los menores valores de estos 3 criterios. Luego, al comparar entre el modelo de Schumacher y el modelo de Chapman-Richards se observa que este último arroja menores valores para los 3 criterios mencionados. Por esto se concluye que el modelo de Schumacher fue el modelo que presentó el menor ajuste para los modelos por localidades. 
+
+
+
+
+

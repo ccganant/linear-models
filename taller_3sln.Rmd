@@ -1,0 +1,948 @@
+---
+title: "Modelos no lineales"
+author: Cristian Gañan, Valentina Ruiz, Maria Isabel Vasquez, Tatiana Marin, Daniel Marin, Marlon Tejada
+date: ""
+output: 
+  html_document:
+    toc: true
+    df_print: paged
+    highlight: tango
+    theme: paper
+    code_folding: hide
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE,
+                      message = FALSE,
+                      fig.align = "center")
+```
+
+# Punto 1 {.tabset .tabset-fade .tabset-pills} 
+
+## Datos
+**Con los siguientes datos:**
+
+```{r}
+datos<- read.csv2("Libro1.csv", dec = ".")
+datos
+```
+
+
+## **1.1** 
+**Ajuste un modelo lineal entre $y$, $x_1$, $x_2$, $x_3$.** 
+
+Se hace un modelo de la forma $y = \beta_0 \ + \beta_1{x_1} + \beta_2{x_2} + \beta_3{x_3}$
+
+```{r}
+library(tidyverse)
+library(modelr)
+
+dato<- datos %>% nest()
+modelo<- function(data){
+  lm(y ~ x1 + x2 + x3, data= data)
+}
+
+dato<- dato %>% 
+  mutate(model= map(data, modelo))
+
+
+model1<- dato %>%  
+  mutate(model1= map(model, broom::glance)) %>% 
+  unnest(model1, .drop = TRUE)
+
+model1
+
+
+```
+
+Según el `r.squared`, es un buen modelo de pendiente positiva y una relación de las variables casi perfecta se prodece a graficar para ver tal relación.
+
+```{r, fig.cap= "**Figura 1** modelo lineal con los datos"}
+with(datos,plot(x= x1+x2+x3, y= y, pch= 20))
+abline(lm(y ~ x1 + x2 + x3, data= datos), col= "red", lwd= 2)
+```
+
+Sin embargo en **figura 1** es notable que el modelo no es bueno, perece ser más una función de tipo polinómica o en su definición mas concreta un modelo no lineal. Aquí se evidencia como los criterios del `r.squared` se quedan cortos mintiendo acerca de la linealidad del modelo.
+
+## 1.2
+**Depure su modelo si lo amerita con ayuda de la `library(leaps)`**
+
+```{r}
+library(leaps)
+
+variables<- leaps(x= datos[,1:3], y= datos[,4], method = "r2")
+
+def<- cbind(variables$size,variables$which, variables$r2)
+colnames(def)<- c("variables","x1","x2","x3", "r2")
+as.data.frame(def)
+```
+
+Se observa en la anterior tabla que el modelo con  $x_1,x_2,x_3$ tiene un $R^2$ de $0.98$ pero este mismo con $x_1,x_2 \ o \ x_1,x_3$ tambien tienen este porcetaje, sin embargo el modelo con solo $x_1$ explica la variablidad en un $94\%$ por lo cual es pertienente quitar las demás variables dejando solo $x_1$; el modelo quedaria de la forma: $y= \beta_0 \ +\beta_1{x_1}$.
+
+```{r}
+dato1<- datos %>% nest()
+modelo<- function(data){
+  lm(y ~ x1, data= data)
+}
+
+dato1<- dato1 %>% 
+  mutate(model= map(data, modelo))
+
+
+model2<- dato1 %>%  
+  mutate(model2= map(model, broom::tidy)) %>% 
+  unnest(model2, .drop = TRUE)
+
+model2
+```
+
+El modelo es altamente significativo, se observa entonces el grafíco para corroborar el ajuste de la linea.
+
+```{r, fig.cap= "**figura 2** Modelo depurado"}
+ggplot(data = datos, mapping = aes(x = x1, y= y)) +
+  geom_point()  + theme_classic() + geom_smooth(method = "lm", se= FALSE) + geom_smooth(se= FALSE, color= "red")
+```
+
+El modelo se ha ajustado mejor a los datos, sin embargo, la linea no describe del todo la tendencia (line azul) de los datos que al paracer se comportaran como una curva (linea roja) y no una linea recta
+
+## 1.3
+**Depure con ayuda de la `library(car)` y analice ambos resultados**
+
+```{r}
+
+library(car)
+s<- as.data.frame(vif(lm(y ~ x1 + x2 + x3, data= datos)))
+
+colnames(s)<- c("VIF con todas las variables")
+s
+
+
+s2<- as.data.frame(vif(lm(y ~ x1 + x2, data= datos)))
+colnames(s2)<- c("VIF con x1 y x2")
+s2
+
+s3<- as.data.frame(vif(lm(y ~ x1 + x3, data= datos)))
+colnames(s3)<- c("VIF con x1 y x3")
+s3
+
+```
+Al correr el $VIF$ de modelo con $x_1$ y $x_2$ ó $x_1$ y $x_3$, el resultado el es mismo con `leaps()` pues hay que recordar que también los dos modelos planteados con estas variables eran viables, es decir, las dos formas de depuración dan lo mismo sin embargo, con `leaps()` al menos para este ejercicio fue mas practico pues los resultados se obtuvieron de formas mas inmediata relacionando todas las posibles interacciones.
+
+## 1.4 {.tabset}
+**Busque un buen modelo entre las variables $y_2$, $x_1$ y $x_2$. Justifique sus respuestas.**
+
+Se observa la tendencia de los datos en un grafíca para determinar como podría ir el modelo.
+
+```{r, fig.cap= "**figura 1** Tendencía de datos"}
+ggplot(data = datos, mapping = aes(x= x1+x2, y= y2)) +
+  geom_point() + geom_smooth(se= FALSE, color= "red") + theme_classic()
+```
+
+A primera vista parece buena idea hacer un modelo lineal entre las variables, sin embargo siguiendo la tendencia que muestran los datos también podría tratarse de un modelo no lineal; ya que los datos tienen forma de campana pero es muy difícil montarlo puesto que no se sabe de donde provienen los datos ni se conoce le fenómeno para darle respuesta de esta forma; se abandona esta posibilidad entonces, la otra alternativa que se puede evaluar es la de un modelo lineal generalizado pues si se detalla la variable $y_2$ de factible suponer que se trata de conteos pues son números enteros que podrían reflejar las repeticiones del experimento. Siguiendo lo analizado se procede a evaluar los dos modelos lineal y general para determinar el mas apropiado.
+
+### Modelo lineal 
+
+```{r}
+dato2<- datos %>% nest()
+modelo3<- function(data){
+ lm(y2 ~ x1+x2, data= data)}
+
+dato2<- dato2 %>% 
+  mutate(model= map(data, modelo3))
+
+
+model4<- dato2 %>%  
+  mutate(model4= map(model, broom::tidy)) %>% unnest(model4, .drop = TRUE)
+
+model4
+
+model5<- dato2 %>%  
+  mutate(model5= map(model, broom::glance)) %>% unnest(model5, .drop = TRUE)
+
+model5
+
+```
+
+El modelo resulta significativo, su `r.squared` es aceptable, sin embargo, el termino $x_1$ no es siginificativo, es pertinente entonces hacer una depuración para observar si las dos variables son necesarias en el modelo.
+
+```{r}
+variable<- leaps(x= datos[,1:2], y= datos[,5], method = "r2")
+
+def<- cbind(variable$size,variable$which, variable$r2)
+colnames(def)<- c("variables","x1","x2", "r2")
+as.data.frame(def)
+
+```
+
+Según los resultados anteriores, es pertinente eliminar la variable $x_1$ pues solo explica el $28\%$ de la variabilidad, mientras $x_2$ explica el $61\%$; teniendo en cuenta que incluyendo las dos variables el $R^2$ es de $64\%$ entonces es buena idea eliminar $x_1$
+
+Se vuelve a correr el modelo sin $x_1$
+
+```{r}
+dato2<- datos %>% nest()
+modelo3<- function(data){
+ lm(y2 ~ x2, data= data)}
+
+dato2<- dato2 %>% 
+  mutate(model= map(data, modelo3))
+
+
+model4<- dato2 %>%  
+  mutate(model4= map(model, broom::tidy)) %>% unnest(model4, .drop = TRUE)
+
+model4
+
+model5<- dato2 %>%  
+  mutate(model5= map(model, broom::glance)) %>% unnest(model5, .drop = TRUE)
+
+model5
+```
+
+Es viable ahora evaluar los supuestos del modelo y comprobar su viabilidad.
+
+```{r}
+anova(lm(y2 ~ x2, data= datos))
+```
+
+```{r}
+res<- resid(lm(y2 ~ x2, data= datos))
+
+shapiro.test(res)
+
+```
+
+```{r}
+library(lmtest)
+
+bptest(lm(y2 ~ x2, data= datos))
+```
+
+Al hacer los test de normalidad y homocedasticidad, su puede concluir con un nivel $\alpha = 0.05$, que hay homocesaticidad sin embargo no hay normalidad en los residuales, para corroborar se hacen los graficos pertinentes
+
+```{r, fig.cap= "**Figura 2** Gráfico de supuestos"}
+par(mfrow= c(2,2))
+plot(lm(y2 ~ x2, data= datos))
+```
+
+En las gráficas anteriores es evidente observar, puntos palanca en el modelo, ¿Es posible esto? Dando una mirada hacia atrás en **figura 1** se puede evidenciar la tendencia de datos en forma de campana, es decir, los datos que tienen valores bajos son posibles, no es descabellado datos aquí, además, no se sabe proveniencia de los datos y así es difícil establecer el comportamiento del fenómeno, teniendo en cuenta estos factores, se decide pertinente, hacer el modelo generalizado, y analizarlo así poder concluir si este resultado es causa un conteo posible de los datos **(ver sección siguiente)**
+
+### Modelo generalizado
+
+```{r, fig.cap= "**Figura 1** Gráfico de supuestos modelo generalizado"}
+dato3<- datos %>% nest()
+modelo5<- function(data){
+ glm(y2 ~ x1 + x2, data= data, family = poisson)}
+
+dato3<- dato3 %>% 
+  mutate(model= map(data, modelo5))
+
+
+model5<- dato3 %>%  
+  mutate(model5= map(model, broom::tidy)) %>% unnest(model5, .drop = TRUE)
+
+model5
+
+model6<- dato3 %>%  
+  mutate(model6= map(model, broom::glance)) %>% unnest(model6, .drop = TRUE)
+
+model6
+
+par(mfrow= c(2,2))
+plot(glm(y2 ~ x1 + x2, data= datos, family = poisson))
+```
+
+La descripción de este nuevo modelo explica mejor los datos **Figura 1**, además, las variables $x_1$ y $x_2$ son significativas, sin embargo, el $AIC \ y \ BIC$ son mayores en este caso al anterior modelo, pero si se comparan las $deviance$ de los dos casos, es evidente observar que el mejor modelo que ajusta mejor a los datos es el general, la $devience$ para el modelo lineal es muy elevada lo que hace desconfiar de su viabilidad. 
+
+Según la **Figura 1** es que probable algunos datos sean atípicos en el modelo se explora esta posibilidad, dando un resultado positivo, los datos $7, \ 29$ y $30$ resultaron ser puntos palanca, se corre un nuevo modelo sin estos datos:
+
+```{r eval=FALSE, include=TRUE}
+m<- glm(y2 ~ x1 + x2, data= datos, family = poisson)
+influence.measures(m)
+```
+
+
+```{r}
+
+fil<- c(7,29,30)
+dato3<- datos %>%  slice(-fil) %>% nest()
+modelo5<- function(data){
+ glm(y2 ~ x1 + x2, data= data, family = poisson)}
+
+dato3<- dato3 %>% 
+  mutate(model= map(data, modelo5))
+
+
+model5<- dato3 %>%  
+  mutate(model5= map(model, broom::tidy)) %>% unnest(model5, .drop = TRUE)
+
+model5
+
+model6<- dato3 %>%  
+  mutate(model6= map(model, broom::glance)) %>% unnest(model6, .drop = TRUE)
+
+model6
+```
+
+Se nota entonces como los datos ($7,\ 29$ y $30$) si afectaban el modelo, tanto la $deviance, \ BIC \ y \ AIC$ rebajaron por lo cual , este modelo es el que mejor se ajusta a los datos; para concluir el modelo resultó siendo mejor ajustado por el modelo generalizado, el modelo lineal simple no lo ajusta bien, pues la $deviance$ de este es muy elevada comparada con la del $GLM$. 
+
+
+## 1.5
+**Corra un modelo no lineal, similar al de la forma $\hat{y}\ = {x_1}^a{x_3}^b$  grafíquelo, analícelo profusamente y mire sus predicciones.**
+
+Para hacer el modelo, se necesitan unos valores de partida $a$ y $b$ como en este caso no se conocen se hizo uso de el algoritmo `brute force` para encontrar estos parametros.
+
+```{r}
+library(nls2)
+fact<- function(x1,x3, a, b) {
+  (x1^a)*(x3^b)
+}
+
+part1 <- expand.grid(a = seq(0, 10, length.out = 20),b= seq(0,0.9,length.out = 20))
+
+mnls<- nls2(y2 ~ fact(x1,x3,a,b), start= part1, data= datos, algorithm = "brute-force")
+```
+
+Hecho esto, se procede a correr con los parametros hallados anteriormente:
+
+```{r}
+dato1<- datos %>% nest()
+modelo2<- function(data) {nls(y2 ~ fact(x1, x3, a , b), start = c(a= 1.05263, b= 0.00000), data = data)}
+
+dato1<- dato1 %>% 
+  mutate(model= map(data, modelo2))
+
+
+model3<- dato1 %>%  
+  mutate(model3= map(model, broom::tidy)) %>% 
+  unnest(model3, .drop = TRUE)
+
+model3
+
+model3<- dato1 %>%  
+  mutate(model3= map(model, broom::glance)) %>% 
+  unnest(model3, .drop = TRUE)
+
+model3
+
+```
+
+Los parametros son significativos, sin embargo la `devience` esta un poco elevada, los datos además los residuales no son normales (ver prueba `shapiro.test`) y al paracer los residuales no son homocedasticos pues en la**Figura 1** se ve claramente un patron lo que evidenciaría este problema.
+
+```{r, fig.cap= "**Figura 1** Modelo no lineal, residuales"}
+mon<- nls(y2 ~ x1^a*x3^b, start = c(a= 1.05263, b= 0.00000), data = datos)
+
+plot(mon)
+
+
+shapiro.test(residuals(mon))
+```
+
+# Punto 2 {.tabset .tabset-fade .tabset-pills} 
+**Un muestreo del número de postes de Acacia mangiun y edad de plantación mostró la siguiente información en 3 localidades.**
+
+## Datos
+
+```{r}
+punto2<- read.csv2("punto2.csv", dec = ".")
+
+punto2<- punto2 %>% rename(npostes= ï..nupostes)
+
+punto2
+```
+
+## 2.1
+**Evalúe un modelo polinomial máximo de grado 2 para cada región y depúrelo si se amerita**
+
+```{r}
+punto<- punto2 %>% group_by(localidad) %>% nest()
+
+pol<- function(data) {
+  lm(edad~npostes+I(npostes^2), data = data)
+}
+
+punto<- punto %>% 
+  mutate(model= map(data, pol))
+
+pun<- punto %>% 
+  mutate(resids= map2(data, model, add_residuals))
+
+resids<- unnest(pun, resids)
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+
+mp
+
+resids %>% ggplot(aes(x= edad, y= resid, group= localidad)) +
+  geom_point() + facet_grid(~localidad) + geom_abline(slope = 0, color= "blue")
+
+```
+
+```{r}
+normal<- function(data){
+  r<- shapiro.test(data)
+  return(r$p.value)
+}
+ 
+resids %>% group_by(localidad) %>% summarise(normalidad= normal(resid))
+
+```
+
+
+Por tratarse de un muestreo del número de postes de Acacia mangium se utilizó un modelo lineal. En todos los modelos se observó una significancia intercepto como en el `numpostes`. 
+Se modeló la variable independiente como ($nupostes^2$). Y también se observó que los residuales se distribuían en un rango que varía entre cero y 1.5 
+
+
+## 2.2
+**Busque si con todos los datos obtiene un mejor modelo**
+
+```{r}
+punto<- punto2  %>% nest()
+
+gmol<- function(data){
+  lm(edad~npostes + I(npostes^2), data = data) }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, gmol))
+
+pun<- punto %>% 
+  mutate(resids= map2(data, model,add_predictions), resids1= map2(data, model, add_residuals))
+
+resids<- unnest(pun, resids, resids1)
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+mp2<- punto %>%  
+  mutate(pol= map(model, broom::glance)) %>% 
+  unnest(pol, .drop = TRUE)
+mp2
+
+resids %>% ggplot(aes(x= npostes, y= resid)) +
+  geom_point() + geom_abline(slope = 0, color= "red")
+
+```
+
+
+```{r}
+anova(lm(edad~npostes + I(npostes^2), data = punto2))
+```
+
+```{r}
+resids %>% summarise(normalidad= normal(resid))
+```
+
+```{r}
+resids %>% ggplot(aes(x= edad, y= pred)) +
+  geom_point() + geom_abline(slope = 1, color= "blue")
+```
+
+
+En base en los resultados obtenidos, se vio que era más conveniente realizar un modelo donde estén las tres localidades para obtener un mejor ajuste de este, ya que se logra una mayor significancia en `nupostes`. En este modelo se pudo  comprobar la normalidad en los datos con una prueba de shapiro wilks. 
+ 
+ 
+## 2.3
+**Explore una regresión no lineal**
+
+```{r}
+
+punto<- punto2  %>% nest()
+
+mln<- function(data){
+  nls(edad~a*exp(npostes*b), data=data, start = list(a=4.94, b=0.074))
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, mln))
+
+pun<- punto %>% 
+  mutate(resids= map2(data, model,add_residuals))
+
+resids<- unnest(pun, resids)
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+
+resids %>% ggplot(aes(x= npostes, y= resid)) +
+  geom_point() + geom_abline(slope = 0, color= "red")
+```
+
+```{r}
+resids %>% summarise(normalidad= normal(resid))
+```
+
+
+En el modelo no lineal presenta una alta significancia en los  parámetros, se puede observar que en ambos modelos hay un comportamiento similar cuando hay una estimación de datos. Por lo que se opta usar un modelo lineal simple por su simplicidad al momento de trabajar con este tipo de datos ya que es un modelo donde hay una mayor facilidad de moldear.
+
+# Punto 3 {.tabset .tabset-fade .tabset-pills}
+**A una especie de cuervos se les midió su edad, y longitud de ala, en varios zoológicos del mundo, con el fin de estudiar el crecimiento de las alas con los siguientes resultados de edad(ed) y longitud de alas(la):**
+
+## Datos 
+
+
+```{r}
+punto3<- read.csv2("punto3.csv", dec = ".")
+punto3<- punto3 %>% select(ed,la)
+punto3
+```
+
+## 3.1
+Haga propuestas de modelación lineal al respecto.
+
+Se escogió la edad de los cuervos como la  variable independiente para estimar los valores de la longitud de las alas de estos mismos a una edad determinada, porque los cuervos, una vez que están en los zoologicos se les registra en un ficha de ingreso el estado general del animal y a través de procesos en laboratorio se le estima la edad que tiene, además a estos se les asignan un identificador único numérico lo que permite que siempre se sepa cuanta edad tienen, además aquellos cuervos que nacen en cautiverio siempre se les lleva el registro de su edad desde el día cero hasta que mueren.
+
+```{r}
+punto<- punto3  %>% nest()
+
+lm3<- function(data){
+  lm(la ~ ed,  data = data)
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, lm3))
+
+pun<- punto %>% 
+  mutate(resids= map2(data, model,add_residuals), resids2= map2(data, model, add_predictions))
+
+resids<- unnest(pun, resids, resids2)
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+anova(lm(la ~ ed,  data = punto3))
+
+```
+
+Al crear un modelo lineal de la forma $la= \beta_{0}\ + \beta_{1}*ed$, se encontró que tanto el intercepto y la pendiente son significativos, además el $R^2$ es $0.8224$ indicando que en aproximadamente un $82\%$ la variable independiente explica la variabilidad de la variable dependiente; al hacer la prueba de `Shapiro Wilk`, arroja un p-value$>0.05$ dando a entender que no se presenta falta de normalidad, sin embargo al hacer la gráfica de los residuales estandarizados **Figura 1** se observa una ligero patrón de función trigonometrica despues de la observación $30$  lo que  lleva a pensar que estos residuales se comportan de forma heterocedastica.
+
+```{r}
+resids %>% summarise(normalidad= normal(resid))
+```
+
+
+```{r, fig.cap= "**Figura 1** residuales"}
+resids %>% ggplot(aes(x= 1:50, y= resid)) +
+  geom_point() + geom_abline(slope = 0, color= "red")
+
+```
+
+Se puede ver claramente que el  modelo lineal es un mal predictor de la longitud de las alas de los cuervos, ya que tiende a sobreestimar en 19.67% aproximadamente con una desviación estandar (o incertidumbre del 84.97%), lo cual significa que los predichos del modelo lineal oscilan individualmente entre una sobreestimación de 65.3% y 104.64%, además, el cuadrado medio del error (`mean sq`)es bastante elevado, se encuentra que hay errores que sobreestiman en un 416.32% aproximadamente y otros errores que subestiman en un -25.93% por lo cual se concluye que este es un mal modelo para explicar la longitud de las alas en función de la edad, además, al hacer la línea del modelo lineal, la cual  predice la longitud de las alas en función de la edad de los cuervos, esta no pasa cerca de la gran mayoría de longitudes de alas verdaderos **figura 2**.
+
+```{r, fig.cap= "**Figura 2** Modelo lineal"}
+with(punto3 ,plot(x= ed, y= la))
+abline(lm(la ~ ed,  data = punto3), col= "red")
+```
+
+
+## 3.2 
+**Un estadístico cree que se puede modelar no linealmente de la siguiente forma: $y= a \ - be^{-cx}$. Por la dificultad de encontrar los valores de partida, debe graficar primero edad vs longitud de ala, para que haga sus propuestas.**
+
+```{r, fig.cap= "**Figura 3** Tendencia de datos"}
+with(punto3, plot(ed, la, pch= 16, ylim= c(0,40)))
+abline(c(35,0), col= "red")
+```
+
+
+Dado que al parecer el modelo lineal no es el mejor predictor para las longitudes de las alas, se recurre a realizar un modelo No lineal el cual ha sido propuesto para este punto del taller, este modelo tiene tres parámetros (a,b y c), y para hallarlos es necesario graficar la longitud en función de la edad para observar la tendencia de los datos (**Figura3**) . Con la formula propuesta por el estadístico y analizando que cuando X tienda al infinito, la formula queda reducida a:  $Y \ = \ a$, se encontró que la asíntota al parecer tiene $n$ valor aproximado a $31$, después de tomar al parámetro  :  $a \ = \ 31$, se despejan los otros dos parámetros con ayuda de las fórmulas propuestas en este punto del taller, encontrando que $a \ = \ 31$, $b \ = \ 27.8$ y  $c \ = \ 0.29$.
+
+```{r}
+punto<- punto3  %>% nest()
+
+nlm<- function(data){
+  nls(la~a-b*exp(-c*ed), data = data,
+                      start = list(a=31, b=27.8, c=0.29))
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, nlm))
+
+pun<- punto %>% 
+  mutate(resids= map2(data, model,add_residuals))
+
+resids<- unnest(pun, resids)
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+```
+
+
+Luego de encontrar estos tres parámetros se sigue con la creación del modelo No lineal en donde se observa que todos sus parámetros resultan significativos después de cuatro iteraciones la formula converge mostrando que los tres parámetros son significativos. El modelo No Lineal es un mejor predictor de la longitud de las alas, porque este tan sólo tiende a sobrestimar en promedio un $8.34\%$ con una desviación estándar (o incertidumbre de $42.24\%$), lo cual significa que los predichos del modelo No Lineal oscilan individualmente entre una sobrestimación de 33.9% y 50.58 mientras que en el modelo lineal la sobrestimación oscilan entre el 65.3% y el $104.64\%$; al observar la **Figura 4** se puede notar claramente que con el modelo No Lineal se estiman mucho mejor la Longitud de las alas.
+
+```{r, fig.cap= "**Figura 4** Modelo no lineal"}
+with(punto3 ,plot(ed,la,cex.main=1.85,cex.sub=2.5, pch= 20))
+x <- seq(min(punto3$ed), max(punto3$ed), 0.1)
+y_lm <- predict(nls(la~a-b*exp(-c*ed), data = punto3,
+                      start = list(a=31, b=27.8, c=0.29)), list(ed = x))
+lines(x, y_lm,col="green",lwd=2)
+```
+
+
+## 3.3
+**grafique y compare 3.1 y 3.2**
+
+```{r, fig.cap= "**Figura 5** Modelo lineal y no lineal"}
+with(punto3 ,plot(ed,la,cex.main=1.85,cex.sub=2.5, pch= 20))
+x <- seq(min(punto3$ed), max(punto3$ed), 0.1)
+y_lm <- predict(nls(la~a-b*exp(-c*ed), data = punto3,
+                      start = list(a=31, b=27.8, c=0.29)), list(ed = x))
+lines(x, y_lm,col="green",lwd=2)
+abline(lm(la ~ ed,  data = punto3), col= "red")
+legend(x=6.3,y=14,legend=c("Modelo Lineal","Modelo No Lineal"),
+       fill=c("red","green"),cex=0.9,text.font=0.2, bg='grey')
+
+
+```
+
+
+Al hacer la gráfica que muestra las dos lineal de tendencia que predicen el Modelo Lineal, y El No Lineal **Figura 5**, se puede observar claramente como los valores predichos por parte del Modelo No Lineal se ajustan mucho mejor a los verdaderos valores de las longitudes de las alas, a comparación del modelo lineal.
+
+
+## 3.4
+**Use `force brute`, para ajustar su modelo.**
+
+
+
+```{r eval=FALSE, include=TRUE}
+part<-expand.grid(a=seq(2,40,length.out = 20), b=seq(28,35,length.out = 20),
+                  c=seq(0,1,length.out = 20))
+modc<-nls2(la~a-b*exp(-c*ed), data = punto3, start = part, algorithm = "brute-force")
+```
+
+```{r}
+punto<- punto3  %>% nest()
+
+nlm<- function(data){
+  nls(la~a-b*exp(-c*ed), data = data,
+                      start = list(a= 30.0000, b= 28.3684, c= 0.3158))
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, nlm))
+
+pun<- punto %>% 
+  mutate(resids= map2(data, model,add_residuals))
+
+resids<- unnest(pun, resids)
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+```
+
+Con las nuevas estimaciones de los valores de partida ($a= 30.000 \ , \ b= 28.3684$ y $c= 0.3158$) para el Modelo No Lineal con `brute force`, se encuentra que sus tres parámetros son significativos después de 8000 iteraciones, al hacer la tabla de cada uno de los porcentajes de errores entre la longitud del ala predicha y la verdadera longitud se encuentra que el error o sesgo disminuyo un poco y paso de sobrestimar el $8,33 %$ a $7,26\%$ y la desviación estándar pasó de $42,24\%$ al $40,07\%$ ; al observar la **Figura 6**se puede notar claramente que el Modelo con `brute force` se estiman mucho mejor la longitud de las alas a comparación de las estimaciones hechas por el modelo lineal, sin embargo no se encuentran diferencias significativas al graficar los dos modelos No lineales, prácticamente son el mismo modelo **Figura 7**.
+
+```{r, fig.cap= "**Figura 6** Modelo con brute force"}
+with(punto3 ,plot(ed,la,cex.main=1.85,cex.sub=2.5, pch= 20))
+x <- seq(min(punto3$ed), max(punto3$ed), 0.1)
+y_lm <- predict(nls(la~a-b*exp(-c*ed), data = punto3,
+                      start = list(a=30.000, b=28.3684, c=0.3158)), list(ed = x))
+lines(x, y_lm,col="red",lwd=2)
+```
+
+```{r, fig.cap= "**Figura 7** Modelos no lineales"}
+with(punto3 ,plot(ed,la,cex.main=1.85,cex.sub=2.5, pch= 20))
+x <- seq(min(punto3$ed), max(punto3$ed), 0.1)
+y_lm <- predict(nls(la~a-b*exp(-c*ed), data = punto3,
+                      start = list(a=30.000, b=28.3684, c=0.3158)), list(ed = x))
+y_lm2<- predict(nls(la~a-b*exp(-c*ed), data = punto3,
+                      start = list(a=31, b=27.8, c=0.29)), list(ed = x))
+lines(x, y_lm,col="red",lwd=3.2)
+lines(x, y_lm2, col= "black", lwd=1.3)
+
+legend(x=5.5,y=14,legend=c("Modelo brute force","Modelo No Lineal"),
+       fill=c("red","black"),cex=0.9,text.font=0.2, bg='grey')
+```
+
+
+# Punto 4 {.tabset .tabset-fade .tabset-pills}
+
+## Datos
+**Con los siguientes datos:**
+
+```{r}
+punto4<- read.csv2("punto4.csv", dec = ".")
+punto4<- punto4 %>% select(-ï..)
+punto4
+```
+
+## 4.1
+Modele el resultado del examen final con base en las pruebas previas, use criterios de depuración si se amerita y analice y juzgue sus resultados, incluidos los análisis y gráficos de los residuales del modelo y discuta sus resultados.
+
+Se realiza un modelo lineal en el cual se toma `final` como variable dependiente y, como variables independientes `test`, `labo`, `exam 1` y `exam 2`.
+
+```{r}
+punto<- punto4  %>% nest()
+
+lm4<- function(data){
+  lm(final~ test + exam1 + exam2 + labo, data = data)
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, lm4))
+
+#pun<- punto %>% 
+  #mutate(resids= map2(data, model,add_residuals))
+
+#resids<- unnest(pun, resids)
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+mp2<- punto %>%  
+  mutate(pol= map(model, broom::glance)) %>% 
+  unnest(pol, .drop = TRUE)
+mp2
+
+```
+**Tabla 1 resultados del modelo**
+
+
+Lo anterior permite evidenciar que tanto el intercepto como la variable independiente “test” son significativas, el RSE es de $5.87$ y el $R^2=0.969$, lo cual indica que los residuales no se alejan mucho de los valores predichos y que el el modelo explica aproximadamente el $96\%$ de la varianza. Además de eso, se realiza la prueba de Shapiro-Wilk con el fin de observar si hay normalidad en los residuales, la cual arroja un valor $W=0.98389$ con un valor p de $0.7231$: se acepta la hipótesis nula, es decir, hay normalidad en los residuales. El AIC de este primer modelo es: $325.6909$, valor que sirve para comparar con los demás modelos planteados.
+
+Una buena manera de analizar el modelo gráficamente es evaluando los residuales y los puntos que ejercen mayor palanca. En la **Figura 1** 
+
+```{r, fig.cap= "**Figura 1**"}
+par(mfrow= c(2,2))
+plot(lm(final~ test + exam1 + exam2 + labo, data = punto4))
+```
+
+De la **tabla 1** se puede observar que solo la variable `test` y el intercepto resultan significativos, mientras que las otras $3$ variables independientes no lo son, sin embargo, tal modelo resulta muy significativo (p-value $< 2.2 e-16$), lo cual podría indicar que tales variables pueden estar autocorrelacionadas. Dado lo anterior, se procede a depurar las variables por el método stepwise `Backward`, habiendo hecho eso, se escoge el modelo sin la variable `exam 1` puesto que el AIC se minimiza, quedando como modelo 2:  $final=f(test,exam2, labo)$.
+
+```{r}
+punto<- punto4  %>% nest()
+
+lm4<- function(data){
+  step(lm(final~ test + exam1 + exam2 + labo, data = data), direction = c("backward"))
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, lm4))
+
+#pun<- punto %>% 
+  #mutate(resids= map2(data, model,add_residuals))
+
+#resids<- unnest(pun, resids)
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+```
+**Tabla 2 Resultados modelo con Backward**
+
+Para analizar mejor el resultado obtenido, se realiza el resumen del segundo modelo propuesto, el cual resulta con un RSE, un R2similares al del primer modelo, pero con un AIC significativamente menor ($180.24$). Sin embargo, se observa que tanto `examen 2` como `labo` siguen sin ser significativas. **Tabla 2**
+
+
+
+```{r}
+punto<- punto4  %>% nest()
+
+lm4<- function(data){
+  lm(final~ test, data = data)
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, lm4))
+
+pun<- punto %>% 
+  mutate(resids= map2(data, model,add_residuals))
+
+resids<- unnest(pun, resids)
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+mp2<- punto %>%  
+  mutate(pol= map(model, broom::glance)) %>% 
+  unnest(pol, .drop = TRUE)
+mp2
+```
+**tabla 3 Modelo 3**
+
+
+Para continuar con la selección del modelo se realiza otras dos veces el proceso stepwise “Backward” obteniendo, un modelo 3 el cual utiliza como variable predictora únicamente a `test`, con un RSE de $6.085$ y un AIC de $326.4325$ y cumpliendo tambien con el principio de parsimonia.
+
+Finalmente, en la **Figura 2** se observa la tendencia aproximadamente lineal de los datos y la relación que tiene `final` con `Test`. En la **Figura 3** se pueden ver los residuales estandarizados siguiendo una tendencia de homogeneidad lo que indica que existe homocedasticidad.
+
+
+```{r, fig.cap= "**Figura 2** Tendencia de los datos"}
+with(punto4, plot(x= test, y= final))
+abline(lm(final~ test, data = punto4), col= "red")
+```
+
+```{r, fig.cap= "**Figura 3** Residuales"}
+resids %>% ggplot(aes(x= 1:50, y= resid))+
+  geom_point() + geom_abline(slope = 0, color= "red") +
+  theme_classic()
+```
+
+
+## 4.2
+**Muestre los coeficientes de correlación entre las variables independientes y saque algunas conclusiones de ello.**
+
+```{r}
+punt<- punto4 %>%  select(test, exam1, exam2, labo)
+
+as.data.frame(cor(punt))
+```
+**tabla 1 matriz de correlaciónes**
+
+
+Los coeficientes de correlación muestran qué tanto se relaciona una variable predictora con otra. Un coeficiente positivo cercano a uno, muestra una correlación positiva casi perfecta; por el contrario, si el coeficiente de correlación es cercano a menos uno, la correlación será negativa.
+
+La **tabla 1** muestra que `test` se encuentra altamente relacionada (cerca de un $95\%$) con `exam1` y `exam 2` así, cualquiera de las tres pudo ser escogida para el ajuste del modelo, sin embargo la segunda y tercera variable no fueron significativas, por tal motivo se prefirió trabajar solo con “test”.
+
+Como resultado general se puede observar que todas las variables se encuentran altamente correlacionadas, exceptuando a “labo”, que presenta su máxima correlación con test, del $27\%$ y su mínima correlación con  `examen 2`,cerca del $5\%$, sin embargo, tal variable no resulta significativa y por ello no se incluye en el modelo. 
+
+## 4.3
+
+**Encuentre las distancias de COOK, significativas.**
+
+```{r}
+mp3<- punto %>%  
+  mutate(pol= map(model, broom::augment)) %>% 
+  unnest(pol, .drop = TRUE)
+mp3
+```
+**tabla 1 resultados varios del modelo**
+
+
+La distancia de Cook mide el efecto de eliminar una observación. Los puntos con residuales o influencia altas, suelen tener una distancia de Cook significativa;asimismo, dichos puntos pueden distorsionar el modelo, es por ello que se amerita esta examinación.
+
+Como se ve en la **tabla 1**, los datos más influyentes son el 13, el 48 y el 50, los cuales resultan significativos. La distancia de cook es una medida de la influencia que ejerce cada dato sobre el modelo, pero como se puede ver en el gráfico de residuales estandarizados, no hay ningún dato que supere ni siquiera las tres desviaciones estándar, por lo que no se podría concluir que alguno de estos datos no sea posible (sea un outlier) en esta población de datos. 
+
+
+
+# Punto 5 {.tabset .tabset-fade .tabset-pills}
+**Se tomó la siguiente información de datos educativos, para intentar modelar la obtención de becas, de acuerdo con las características género, raza, índice de calidad (cain), sector educativo, tipo de educación a la que se aspiraría (clásica, vocacional, pregrado), y las notas en las asignaturas elegidas para programar las becas ($b=beca$, $nb= sin\ beca$)**
+
+
+La base de datos que se utiliza para modelar la variable dependiente “beca” en función de las demás variables,  contiene variables de tipo binomial, es decir, variables de tipo éxito-fracaso. Para ajustar el modelo con éxito, inicialmente se transformaron las variables binomiales a variables dummy, pues permiten diferenciar mejor las clases de cada variable. Esto con la ayuda de las tres librerías propuestas
+
+
+```{r}
+library(MASS)
+library(car)
+library(pscl)
+punto5<- read.csv2("gereno.csv", dec = ".")
+
+
+punto<- punto5  %>% nest()
+
+lm4<- function(data){
+  glm(bec~genero+raza+cain+sect+tipr+geo+filo+mate+cina+hist,data= data,family=binomial (link=logit))
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, lm4))
+
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+mp2<- punto %>%  
+  mutate(pol= map(model, broom::glance)) %>% 
+  unnest(pol, .drop = TRUE)
+mp2
+
+```
+
+
+Este modelo inicial, incluyendo todas las variables, muestra que solo el intercepto, la clase “tiprvoca” y “cina” son significativas, es por ello que se procede a hacer una depuración de las variables vía `backward`, con el fin de minimizar $AIC (257.77)$ y $deviance (247.64)$
+
+El paso `step.wise`, arrojó varios posibles modelos de los cuales se probaron dos, el primero de ellos es 
+`bec~ cain+tipr+cina`  y el segundo es `bec~tipr+cina`  , (este último contiene las dos variables que inicialmente dieron significativas). 
+En ambos resultados se observa que ninguna otra variable comenzaba a ser significativa, tan solo “tiprvoca” y “cina”, sin embargo, ambos modelos reducen en $AIC$, aunque la deviance continúa siento la misma. 
+
+```{r}
+punto<- punto5  %>% nest()
+
+lm5<- function(data){
+  glm(bec~cain+sect+tipr+cina,data= data,family=binomial (link=logit))
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, lm5))
+
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+mp2<- punto %>%  
+  mutate(pol= map(model, broom::glance)) %>% 
+  unnest(pol, .drop = TRUE)
+mp2
+
+```
+
+```{r}
+punto<- punto5  %>% nest()
+
+lm6<- function(data){
+  glm(bec~tipr+cina,data= data,family=binomial (link=logit))
+   }
+
+
+punto<- punto %>% 
+  mutate(model= map(data, lm6))
+
+  
+mp<- punto %>%  
+  mutate(pol= map(model, broom::tidy)) %>% 
+  unnest(pol, .drop = TRUE)
+mp
+
+mp2<- punto %>%  
+  mutate(pol= map(model, broom::glance)) %>% 
+  unnest(pol, .drop = TRUE)
+mp2
+
+```
+
+Los resultados del último modelo, muestran que la obtención de beca tan solo dependen de las variables “cina” y “tipr”, para esta última, la clase que influye es la de tipo vocacional. 
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,573 @@
+---
+title: "Modelación lineal"
+author: Cristian Gañan, Valentina Ruiz, Maria Isabel Vasquez, Tatiana Marin, Daniel Marin, Marlon Tejada
+date: ""
+output: 
+  word_document:
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+
+#Punto 1 {.tabset .tabset-fade .tabset-pills}  
+
+## 1.1
+
+```{r}
+library(tidyverse)
+datos<- read.table("Bosque_deg.txt")
+datos<- datos %>% mutate(V1= as.numeric(V1), V2= as.numeric(V2),
+                         V3= as.factor(V3),V4= as.numeric(V4),
+                         V5= as.numeric(V5)) %>% 
+  rename(dap= V1, Alt= V2, ps= V3, edad= V4, Vol= V5)
+datos
+
+```
+
+***De este grupo de variables escoja con argumentos dasometricos la que debiera ser la variable dependiente. Use la función pairs del R y haga una descripción del comportamiento de las variables y elija las que, a su juicio, serían buenas candidatos a modelar con regresión lineal simple. Justifique sus respuestas.***
+
+En este conjunto de datos, se puede ver en la **fig.1**, pares de comparaciones para las variables, hay que anotar dos cosas antes del análisis de este; en la columna $alt$ se encontraban datos mal escritos desde la base, estos eran $105.711 \gamma 134.86$ la forma más lógica de corregirlos fue correr el punto de la $,$ para transformarlos en $10.57 \gamma 13.49$ respectivamente; a pesar de esto al graficar había un dato que no se ajustaba o mostraba un valor no concordante con el resto, por esto y sabiendo que al correr la coma los demás valores de esta fila serían inciertos pues no es del todo claro que estos fueran errores de entrada, se procedió a borrar la fila del valor $13.49$; $10.57$ se dejó en el modelo pues seguía la tendencia del resto. Teniendo estas claridades se realizó el análisis de la **fig.1**:
+
+```{r, fig.cap= "**fig.1**  Matriz de relación par"}
+pairs(Vol ~ Alt*dap*edad, data = datos)
+```
+
+
+  *$Vol \gamma Alt$: Aquí, hay relación sin embargo no muestra un tendencia clara para un modelo pues están un poco dispersos los datos.
+  
+  *$Vol, Alt, dap$: Si se analiza $dap \gamma Vol$ se puede observar una tendencia más ordenada a la anterior serie, pareciéndose a un modelo lineal,  ya si se analiza $dap \gamma Alt$ se observa el mismo patrón presentado en el anterior par de datos $(Vol \gamma alt)$, una dispersión considerable.
+  
+  *$Vol, Alt, dap, edad$: Nuevamente los pares $Vol \gamma edad$ tienen comportamiento ordenado y reflejando la posibilidad de un modelo lineal; $edad \gamma Alt$ no muestran un patrón de comportamiento claro siendo difícil ajustar un modelo; $edad \gamma dap$ muestran una relación  evidente lineal, un patrón casi como una línea recta.
+
+
+```{r, fig.cap= "**fig.2**  linea de tendencia lineal", }
+ggplot(datos, mapping = aes(x = dap+edad+Alt, y = Vol)) +
+  geom_point() + geom_smooth(method = "lm") + facet_wrap(~ps, nrow= 2) +
+  theme_classic()
+```
+
+Según el análisis anterior todas las variables tienen una relación mejor con $Vol$, se puede concluir entonces que una buena opción de variable independiente sería $Vol$.
+
+Para hacer claro lo dicho anteriormente, se procedió a graficar $dap+edad+Alt vs Vol$ y se hicieron dos facetas por parcela, para visualizar mejor las tendencias; en la **fig.2** se muestran los datos, con una línea de modelo lineal, los datos parecen ajustarse bien a este; sin embargo al hacer el mismo gráfico con una línea de tendencia **fig.3** se observa un mejor ajuste de la línea cuadrático.
+
+
+```{r, fig.cap= "**fig.3**  linea de tendencia"}
+ggplot(datos, mapping = aes(x = dap+edad+Alt, y = Vol)) +
+  geom_point() + geom_smooth() + facet_wrap(~ps, nrow= 2) +
+  theme_classic()
+```
+
+La variable $Vol$ es elegida como independiente por su dificultad para ser medida en campo lo que no pasa con $dap$ que puede ser medida con facilidad, las otras variables también son complicadas de medir; sin embargo es claro que el volumen debería ir como independiente por su relaciòn con los demás datos, lo pertinente ahora sería mirar la posibilidad de omitir variables del modelo completo. Esto se analizará más adelante.
+
+##1.2
+
+***Una buena idea para modelar es el uso de una función suavizadora `smooth()` en modelos lineales aditivos `library(mgcv)`, para lo cual corra un modelo suavizado como:***
+
+***`modesuav<-gam(y~s(X1)+s(X2)+s(X3),family=”gaulss)`***
+
+```{r, fig.cap= "**fig.4**   Modelos suavisados"}
+library(mgcv)
+modesuav<-with(datos,gam(Vol~s(dap)+s(Alt)+s(edad)))
+
+par(mfrow=c(1,3))
+plot(modesuav)
+
+```
+
+En la **fig.4** se pueden ver los resultados de hacer modelos suavizados con las variables; el modelo en general resulta significativo, en el gráfico de $dap$ es claro observar que a medida que el $dap$ aumenta el $Vol$ también lo hace hasta llegar a un punto de estabilidad; los intervalos de confianza describen lo esperado para un modelo, a medida que los datos se alejan de la media la confianza es menor. Para el gráfico $edad$ es posible encontrar anomalías pues es de esperarse que a más edad el volumen incremente o al menos no disminuya, sin embargo, al inicio del gráfico se encuentra esto, no muy pronunciado, los intervalos de confianza son anchos en este punto, esperándose entonces estimaciones con confianza baja como predicciones poco confiables para edades tempranas. Finalmente el gráfico de $Alt$ muestra una tendencia casi perfecta en línea recta e intervalos estrechos. 
+
+
+## 1.3
+
+***Ejecute un dendromodelo (tree) para ver si aparecen interacciones complejas entre las variables, para lo cual debe bajar la librería tree, incorpórela al R.***
+
+
+```{r, fig.cap= "**fig.5**Partición arborea"}
+library(tree)
+modarb<-tree(Vol~edad,data=datos)
+plot(modarb)
+text(modarb)
+
+```
+
+En la **fig.5** se muestra una partición arbórea para los datos, es evidente que la $edad$ es la variable más importante en el modelo para determinar el $Vol$, para $edad > 11.495$ los valores de $Vol$ tenderán a $0.4160$ pero cuando $edad < 11.495$ importara  si $edad < 7.9 \vee edad  > 7.9$  en este punto hay dos ramas para  $\left\lbrace edad > 5.745 \vee edad < 5.745 \right\rbrace \wedge \left\lbrace edad > 9.28 \vee edad < 9.28\right\rbrace$ para lo cual los valores respectivos seran: $0.0755, 0.0270 \wedge 1.960, 0.1282$.
+ 
+
+### Modelo
+
+`modelo1<-lm(y~X1*X2*…*Xk+I(X1^2)+I(X2^2)+…..I(Xk^2)) `
+
+```{r, fig.cap= "**fig.1**   Resumen del modelo original"}
+modelo1<-with(datos, lm(Vol~dap*Alt*edad+I(dap^2)+I(edad^2)+I(Alt^2)) )
+summary(modelo1)
+```
+* **fig.1**   Resumen del modelo original
+
+
+Al probar el modelo inicial, se puede ver en la **fig.1** que el modelo no es significativo, partiendo de esto se hace entonces actualizaciones del modelo `backward` para escoger el mejor modelo
+
+```{r, fig.cap= "**fig.2**   Posibles modelos"}
+modbw<- step( modelo1, direction = "backward", trace=T)
+```
+* **fig.2**   Posibles modelos
+
+
+Al terminar de correr el proceso `backward` se puede notar que el modelo quedó de la siguiente forma: `Vol ~ dap + Alt + edad + I(dap^2) + dap:edad + Alt:edad`. Se procedió a corroborar la pertinencia del modelo sin embargo como se puede ver en la **fig.3** no todas las variables del modelo son significativas, se considera la pertinencia de quitar variables del modelo.
+
+```{r, fig.cap= "**fig.3**    Modelo elegido 1"}
+modelo2<-with(datos, lm(Vol ~ dap + Alt + edad + I(dap^2) + dap:edad + Alt:edad) )
+summary(modelo2)
+```
+* **fig.3 **  Modelo elegido 1
+
+
+Se hizo entonces, gráficos para los criterios $R^2$, $CP$ y  $BIC$ (**fig.4**) se puede ver para los gráficos de $R^2$ y $CP$ se podrían omitir `edad^2`, `Alt^2`, `dap:Alt`, `dap:Alt:edad` y `dap`, `Alt`, `dap^2`, `edad^2`, `Alt^2`, `dap:Alt`, `dap:edad`, `Alt:edad`, `dap:Alt:edad` respectivamente; con el criterio de $BIC$ se podrían omitir `dap`, `Alt`, `dap^2`, `edad^2`, `Alt^2`, `dap:Alt`, `dap:edad`. Es claro entonces que para el modelo elegido (`Vol ~ dap + alt + edad + I(dap^2) + dap:edad + alt:edad`) se debería quitar ya sea ` dap:edad ` ò ` alt:edad` o quizás las dos en $CP$ y $BIC$ se deberían quitar, pero con $R^2$ ninguna debería quitarse del modelo. Como dos pruebas de las tres apoyan la eliminación de las variables  `dap:edad ` y ` alt:edad` se procede a hacerlo de este modo.
+
+```{r, fig.cap= "**fig.4**    criterios para la elecciòn de variables"}
+library(leaps)
+
+s<- regsubsets(Vol~dap*Alt*edad+I(dap^2)+I(edad^2)+I(Alt^2), 
+               data = datos, nbest = 2, method=c("exhaustive", "backward", "forward", "seqrep"))
+
+par(mfrow=c(1,2))
+plot(s, scale = "adjr2")
+plot(s, scale = "Cp")
+plot(s)
+```
+
+Al quitar la variable `alt:edad` el modelo es significativo, lo que sería una muestra de la pertinencia de este. Lo que es preciso ahora es hacer pruebas para la viabilidad del modelo, esto se hará en el siguiente apartado.
+
+```{r}
+modelo3<-with(datos, lm(Vol ~ dap + Alt + edad + I(dap^2) + dap:edad ) )
+summary(modelo3)
+```
+
+
+## 1.4 
+
+**¿Hay heterocedasticidad?**
+
+```{r}
+shapiro.test(rstudent(modelo3))
+```
+* **fig.1**    Normalidad de los residuales
+
+
+```{r}
+library(lmtest)
+bptest(modelo3)
+
+```
+* **fig.2**    Prueba de Homogeneidad de variazas
+
+
+Al hacer pruebas de `shapiro.test()` para normalidad y `bptest()` para homogeneidad, se puede concluir de estas  que el los residuales del modelo son normales, ademas, la variaza es constante a lo largo de la muestra. 
+
+En la **fig.3** se observa el grafico de residuales.
+```{r, fig.cap= "**fig.3**    Residuales"}
+plot(residuals(modelo3), pch= 20, col= "blue")
+abline(0,0, col= "red")
+```
+
+Es claro en la **fig.3** que no hay puntos palaca u observaciones influenciales, sin embargo, para corroborar esto se hace la prueba `influence.measures`, el resultado de este test arrojo que las observaciones $5 y 28$ son posibles puntos de influencia. Se procede a correr el modelo sin estas observaciones, sin embargo, al hacer una análisis de varianza resulta la variable `èdad` no significativa (**fig.5**), lo que no pasa con el modelo anterior con todas la observaciones (fig.6), por lo que se puede concluir que no habría que borrar puntos, pues el modelo pierde información que puede ser importante. 
+
+```{r eval=FALSE, include= TRUE}
+influence.measures(modelo3)
+```
+
+
+```{r}
+Modeloult3<- with(datos,lm(Vol ~ dap + Alt + edad + I(dap^2) + dap:edad, subset=(1:length(Vol)!= c(5,28))))
+anova(Modeloult3)
+```
+* **fig.5**  Anova modelo sin observaciones 5 y 28
+
+```{r}
+anova(modelo3)
+```
+* **fig.6**  Anova con todas las observaciones 
+
+#Punto 2 {.tabset .tabset-fade .tabset-pills}
+
+##2.1
+
+***Calcule grado de asociación entre las variables `alt` y `dap`, `alt*dap2` y `vol`, `alt` y `vol`, `vol` y la variable combinada . Y califíquelos por lo menos con dos pruebas, y además los intervalos de estimación para los coeficientes de correlación obtenidos.***
+
+A partir los datos  se procedió a calcular el grado de asociación “covarianza” definida como $S_{xy}= \frac{\sum_{i=1}^n({x_i-\overline{x}*y_i-\overline{y}})}{número de observaciones}$
+entre `alt vs dap`, `dap^2*alt vs vol`,`alt vs vol` y `vol vs dap` , ver **table.1**,estas relaciones se decidieron mostrar en las **fig.1,2,3, 4*** respectivamente. Cabe destacar que la covarianza tiene algunos problemas para su respectivo análisis dado que esta no está acotada en un número específico, pudiendo arrojar  números positivos o negativos muy elevados dificultando la comprensión de cada una de estas, además  las unidades en algunas veces son inconsistentes en la realidad física. En estas cuatro covarianzas lo único que podemos decir es que a  medida que una variable del eje “x” está aumentando en una unidad, su homóloga en el eje “Y” está creciendo: $9.75, 0.34,1.04$ y $967.21$ unidades respectivamente.
+
+cov(datos_oky$dap,datos_oky$alt)
+cov(datos_oky$Vol,datos_oky$dap2_alt)
+cov(datos_oky$Vol,datos_oky$alt)
+cov(datos_oky$dap,datos_oky$Vol
+
+```{r, fig.cap= "**table.1**    Covarianzas "}
+summarise(.data = datos, 
+  cov(dap,Alt), cov(Vol,Alt), cov(dap,Vol),cov(Vol,(dap^2*Alt)))
+```
+
+
+```{r, fig.height= 3, fig.width= 4, fig.cap= "**fig.1**"}
+ggplot(datos, mapping = aes(x = dap, y = Alt))+ 
+  geom_point()+ theme_classic()
+```
+
+```{r, fig.height= 3, fig.width= 4, fig.cap= "**fig.2**"}
+ggplot(datos, mapping = aes(x = Vol, y = Alt))+ 
+  geom_point()+ theme_classic()
+```
+
+```{r, fig.height= 3, fig.width= 4, fig.cap= "**fig.3**"}
+ggplot(datos, mapping = aes(x = dap, y = Vol))+ 
+  geom_point()+ theme_classic()
+```
+
+```{r, fig.height= 3, fig.width= 4, fig.cap= "**fig.4**"}
+ggplot(datos, mapping = aes(x = Vol, y = (dap^2*Alt)))+ 
+  geom_point()+ theme_classic()
+```
+
+
+En **fig.1** y **fig.3** el grado de asociación es bajo pues los datos presentan un patrón difícil de describir, por lo que su $R^2$ tendría que ser bajo; de **fig.2** y **fig.4** se puede concluir que hay una asociación fuerte siendo más en `$alt vs dap^2$` que en `$dap vs vol$`, esto es cierto, si se tiene en cuenta los patrones presentados mientras que en el primero es evidente una línea recta, en el segundo el patrón ya no es de línea recta  si más bien una curva; entonces el $R^2$ sería más alto en `$alt vs dap^2$` que en `$dap vs vol$`.
+
+
+##2.2
+
+***Usando la prueba de  `cor.test(x, y, alternative = c("two.sided", "less", "greater"),method = c("pearson", "kendall", "spearman"),exact = NULL, conf.level = 0.95, continuity = FALSE, ...)` que conclusiones saca de sus resultados anteriores***
+
+```{r eval=FALSE, include=TRUE}
+with(datos, cor.test(Alt,dap, alternative = c("two.sided", "less", "greater"),method = c("kendall, pearson, spearman"),exact = NULL, conf.level = 0.95, continuity = FALSE))
+
+with(datos, cor.test(Alt,Vol, alternative = c("two.sided", "less", "greater"),method = c("kendall, pearson, spearman"),exact = NULL, conf.level = 0.95, continuity = FALSE))
+
+with(datos, cor.test(Vol,dap, alternative = c("two.sided", "less", "greater"),method = c("kendall, pearson, spearman"),exact = NULL, conf.level = 0.95, continuity = FALSE))
+
+with(datos, cor.test(Vol,(dap^2*Alt), alternative = c("two.sided", "less", "greater"),method = c("kendall, pearson, spearman"),exact = NULL, conf.level = 0.95, continuity = FALSE))
+```
+
+
+
+Como la covarianza es difícil de interpretar dado sus múltiples problemas, en la práctica, lo que se hace es trabajar con una corrección de esta, llamada “coeficiente de correlación” el cual tiene varios métodos entre estos: Pearson, Kendall, Spearman. este coeficiente es adimensional, con un rango entre $-1$ y $1$, mostrando que si es mayor a cero, la relación entre las dos variables es directa, si es menor a cero la relación sería inversa, y si es igual o muy cercana a cero podría ocurrir que las variables son independientes o que no existe relación lineal entre ellas.
+
+Luego de esto se parte de dos supuestos, $Ho:$  *dice que las dos variables en estudio son independientes*,mostrando no correlación entre ellas, $Ha$ *dice que las dos variables sí están correlacionadas*;se encontró unas relaciones en `P-values` que se muestran en la tabla, allí podemos evidenciar que las variables que están correlacionadas linealmente y de forma positiva en los tres métodos de correlación trabajados son la `alt vs vol`, el `vol vs dap` y `vol vs alt*dap^2`, el `alt vs dap` no se relaciona linealmente, hay que tener en cuenta que el coeficiente de correlación de `pearson` es paramétrico mientras los otros dos no, pues se basan en rangos, por consiguiente al ser los datos normales es más confiable la prueba de `pearson`, muestra de ello es que los resultados coinciden con los analizados en el punto anterior gráficamente. 
+
+$prueba$ | $(Alt)vs(dap)$ | $(Alt)vs(Vol)$ | $(Vol)vs(dap)$ | $(Vol)vs(dap^2*Alt)$|
+---------|----------------|----------------|----------------|---------------------|
+$pearson$| | | | |
+$valor p$|$0.07398$| $0.0005092$ | $2.543e^{-13}$ | $<2.2e^{-16}$|
+$coeficiente$| $0.3152009$ | $0.5717486$ | $0.9090538$ | $0.9976475$|
+---------|----------------|----------------|----------------|---------------------|
+$spearman$| | | | |
+$valorp$| $0.08662$ | $0.004064$ | $<2.2e^{-16}$ | $<2.2e^{-16}$|
+$coeficiente$| $0.3029087$ | $0.4868388$ | $0.9741704$ | $0.9965739$|
+---------|----------------|----------------|----------------|---------------------|
+$kendall$| | | | |
+$valorp$| $0.8253$ | $0.008052$ | $8.856e^{-13}$ | $3.08^{-15}$|
+$coeficiente$| $0.2129293$ | $0.3241708$ | $0.8772633$ | $0.9649293$|
+
+
+
+##2.3
+
+***Ejecute el modelo de regresión lineal `v=b0 + b1*dap + b2*alt + b3*dap*alt+ b4*dap^2*alt` y entregue el modelo minimal y, todos los juicios posibles con base en gráficas y pruebas teóricas de residuales vistas.***
+
+El análisis de regresión consiste en encontrar un modelo que relacione los valores medidos de un conjunto de variables, en este caso, el `dap`, `alt` y sus combinaciones para poder estimar el `vol` de los árboles, se sabe que los valores medidos en el mundo real nunca se ajustan de forma perfecta a un modelo, debido en primer lugar a errores de medida, pero también a que cualquier modelo matemático es una simplificación del mundo real, y si tuviera en cuenta todos los factores que influyen en un conjunto de variables, sería inmanejable. Por tanto, no tiene sentido aspirar a encontrar un modelo que prediga exactamente los valores medidos, y se debe admitir que el modelo cometerá un cierto error. Un modelo útil encuentra una relación funcional sencilla en conjuntos de pocas variables. Se trata de explicar una variable que tiene importancia, en función de otro conjunto de variables mejor conocidas o más fáciles de medir. 
+
+```{r}
+mod_vol<-with(datos ,lm(Vol~dap+Alt+(dap*Alt)+I(dap^2*Alt)))
+summary(mod_vol)
+```
+
+se encontró con este modelo propuesto que todas las variables independientes para calcular el volumen resultan significativas, sin embargo, la variable combinada  `alt*dap^2`  es la que más tiene un valor cercano a cero, indicando que esta variable combinada por sí sola mostraría valores estimados para el volumen.  
+
+```{r}
+mod_minimizado <- with(datos , lm(Vol~I(dap^2*Alt)))
+summary(mod_minimizado)
+
+```
+* **Modelo minimizado**
+
+```{r, fig.height= 5, fig.width= 6, fig.cap= "**fig.1**      Residuales estanadarizados del modelo minimizado"}
+plot(rstandard(mod_minimizado), pch= 16)
+abline(0,0, col= "red")
+```
+
+Se realiza un modelo con esta variable, arrojando que es significativo, sin embargo no es normal, ademas, es heterocedástico.
+
+```{r}
+shapiro.test(rstandard(mod_minimizado))
+bptest(mod_minimizado)
+```
+
+
+Para resolver este problema, se hace una transformación $log()$ a todo el modelo.
+
+```{r}
+mod_tras <- with(datos , lm(log(Vol)~log(I(dap^2*Alt))))
+summary(mod_tras)
+```
+
+
+Al hacer esto, las pruebas de `breusch pagan` y `shapiro.wilk` arrojan lo esperado, modelo homocedástico y normal.
+
+```{r}
+shapiro.test(rstandard(mod_tras))
+bptest(mod_tras)
+```
+
+```{r, fig.height= 5, fig.width= 6, fig.cap= "**fig.2**      Residuales estanadarizados del modelo minimizado transformado"}
+plot(rstandard(mod_tras), pch= 16, ylim = c(-2,2))
+abline(0,0, col= "red")
+```
+
+
+##2.4
+
+***Proponga y ejecute algunas modelaciones para el factor mórfico:***
+  * ***salidas de un volumen con variable combinada***
+  * ***salidas de los datos***
+
+
+```{r}
+datos<- datos %>%  mutate(A.basal= (pi/40000)*dap^2) %>% 
+  mutate(F.forma= Vol/(A.basal*Alt)) %>% 
+  mutate(volumen.ff= round(0.2711151*(A.basal*Alt), 3))
+
+datos
+summarise(datos, promedio= mean(F.forma))
+
+```
+
+
+Al realizar el promedio del factor de forma de los 33 árboles nos da un valor de $F_{forma}=0.279917$ lo cual equivale al factor mórfico del bosque degradado. Al multiplicar el valor de factor de forma por el volumen de un cilindro de referencia se obtiene una estimación del volumen, al comparar estos datos con los del volumen dados se puede ver que es una buena estimación.
+
+En ingeniería forestal tener el dato del factor mórfico es importante ya que con este se puede obtener aproximaciones del volumen de la madera que hay en un bosque, y es mucho más fácil ya que solo se necesita las mediciones del DAP y alturas, esto nos ahorra el trabajo de tener que que tumbar el árbol y cortarlo en trozas para hallar el volumen.
+
+
+
+#Punto 3 {.tabset .tabset-fade .tabset-pills}
+
+***Los siguientes datos corresponden a un inventario de Pinus patula, realizado en 4 rodales diferentes en el departamento del Cauca en que: `lote`: código de lote, `parc`: número de la parcela en el mapa, `numarb`: número de árboles medidos/parc, `narha`: numero promedio de árboles/ha, dappr:DAP promedio/parc, `dcpr`: diámetro cuadrmedio/parc, `altpro`: altura total promedia/arbol/parc, `Vtccha`: volumen total con corteza/ha, `Vtscha`: volumen total sin corteza/ha, `vasccha`:volumen aserrío con corteza/ha, `Vpccha`: volumen de pulpa con corteza/ha, `vasescha`: volumen aserrío sin corteza/ha, `vpuscha`: volumen de pulpa sin corteza/ha, `VCSCha`: volumen comercial sin corteza/ha, `porvcvt`: porcentaje de volumen comercial sin corteza con respecto al volumen total.***
+
+##3.1
+
+Ajuste un modelo para `VCSCha`, con base en `dappr, dcpr, altpro, narha`, para cada uno de los rodales.
+
+```{r}
+rodal<- read.csv2("Inventario.csv", dec = ".")
+rodal
+```
+
+```{r}
+library(tidyverse)
+library(modelr)
+
+rodales<- rodal %>%  group_by(lote) %>% nest()
+
+
+modelos<- function(data){
+  lm(VCSCha~dappr + dcpr + altpro + narha, data = data)
+}
+
+rodales<- rodales %>% 
+  mutate(model= map(data, modelos))
+
+
+model_df<- rodales %>%  
+  mutate(model_df= map(model, broom::tidy)) %>% 
+  unnest(model_df, .drop = TRUE)
+
+model_df
+
+model_df<- rodales %>%  
+  mutate(model_df= map(model, broom::glance)) %>% 
+  unnest(model_df, .drop = TRUE)
+
+model_df
+```
+
+En el `R1` hay una alta significancia en el número promedio de $\frac{árboles}{ha}$ `narha` junto con  la $altura (total) promedia/árbol/parc$ `altpro`, y una baja significancia en el  diámetro cuadrado $\frac{medio}{parc}$ `dcpr`.
+
+En el `R3` se puede observar una alta significancia en el número promedio de $\frac{árboles}{ha}$, y una significancia media en la $altura promedio/árbol/parc$ `altpro` y el $\frac{diámetro cuadrado medio}{parc}$ `dcpr`.
+
+En el `R4` hay una alta significancia en el número promedio de $\frac{árboles}{ha}$ `narha`, junto con el  $\frac{diámetro cuadrado medio}{parc}$ `dcpr`, y una significancia media en $\frac{DAP_{promedio}}{parc}$ `dappr` junto con la $altura (total) promedia/árbol/parc$ `altpro`.
+
+Al aplicar la prueba de `Shapiro-Wilk` en los tres rodales (`R1`, `R3`, `R4`) siguen una distribución aproximadamente normal, ya que el valor de dicha prueba en cada uno de los rodales ($Wr1 = 0,89907, Wr3=0,97616,$ y $Wr4=0,96853$) tienen valores muy cercanos a uno $(1)$, también se puede ver que en los tres rodales hay una alta significancia en el número promedio de $\frac{árboles}{ha}$ `narha`, y si observamos bien el ejercicio se puede afirmar que así debe de ser ya que los datos son tomados de un inventarios realizado de Pinus patula, en el Departamento del Cauca.
+
+##3.2
+
+Compare los resultados de cada rodal con el modelo general con todos los datos para todo ese bosque.
+
+```{r}
+general<- rodal %>% nest()
+
+
+modelos<- function(data){
+  lm(VCSCha~dappr + dcpr + altpro + narha, data = data)
+}
+
+general<- general %>% 
+  mutate(model= map(data, modelos))
+
+model_g<- general %>%  
+  mutate(model_g= map(model, broom::tidy)) %>% 
+  unnest(model_g, .drop = TRUE)
+
+model_g
+
+model_g<- general %>%  
+  mutate(model_g= map(model, broom::glance)) %>% 
+  unnest(model_g, .drop = TRUE)
+
+model_g
+```
+
+
+En el modelo general se puede observar que al aplicar el test de `Shapiro-Wilk` los datos siguen una distribución aproximadamente normal, dado el  valor de p-evalue se puede decir que hay un no rechazo de la $H_o$.
+
+También se  observa  que hay una alta significancia en todos sus componentes (`dappr, decpr, altpro, narha`) esto se puede dar por la relación de los datos, ya que los datos utilizados para el modelo general no son tomados del mismo espacio, por lo tanto pueden existir valores muy diferentes entre rodales.
+
+* **R1 vs modelo general(modg)**
+
+En `R1` se puede observar que los residuos del error estándar es de 11.45  mientras que en el modelo general es de $19.87$. 
+En el `R1` solo las variables  narha y decpr son de alta significancia, mientras que en el modelo general todas son de alta significancia. 
+El `P-evalue` se encuentra en el modelo general  $<2.2e^{-16}$ es mucho menor al `p-evalue` encontrado en el `R1` $1.792e^{-05}$.
+
+
+* **R3 vs modg**
+
+En `R3` los residuos del error estándar tienen un valor de $18.4$, aquí se puede observar que los residuos del error estándar de $R3$ tiene un valor mas cercano a los residuos del `modg`.
+En `R3` solo se encuentra una alta significancia en `narha`, y en el `modg` todos los datos son de ata significancia.
+El `p-evalue`  del `modg` sigue siendo menor al `p-evalue` del `R3` $2.607e^{-11}$.
+
+
+* **R4 vs modg**
+
+En `R4` los residuos del error estándar es de $22.58$ siendo un valor mayor que los residuos del `modg`. Pero en `R4` se tiene $16$ grados de libertad, y en el `modg` $52$ grados de libertad.
+En `R4` también solo dos variables son de alta significancia `narha y dcpr` 
+el `p.evalue` de `R4` es de $3.812^{e-08}$ este valor es mayor que el `p-evalue` del `modg`.
+
+
+
+##3.3
+
+```{r}
+mod.nl <- nls(VCSCha~a*dappr*exp(-b*altpro), 
+              data = rodal, start = list(a=1, b=0))
+
+modg <- lm(VCSCha~dappr + dcpr + altpro + narha, data = rodal)
+summary(mod.nl)
+shapiro.test(residuals(mod.nl))
+windows()
+plot(residuals(mod.nl), main = "Modelo Ajustado")
+abline(0,0, col="red")
+
+#Prueba de bondad de ajuste
+pred <-predict(mod.nl)
+chi.mod.nl <- sum((rodal$Vtscha-pred)^2/pred)
+chi.mod.nl
+qchisq(0.975, 55)
+
+pred1 <- predict(modg)
+chi.modg <- sum((rodal$Vtscha-pred1)^2/pred1)
+chi.modg
+qchisq(0.975, 55)
+
+#homocedasticidad
+AIC(modg, mod.nl)
+```
+
+Para realizar el modelo ajustado se hizo un modelo no lineal usando la función nls, donde tras varias iteraciones los valores iniciales convergieron a los valores de los parámetros
+$a=7.098$ y $b=-0.022$.
+ 
+Para ver que tal se ajustan los modelos, entre los dos modelos el que mejor se ajusta es el modg, pero al comparar el valor del chi cuadrado de cada modelo con el valor tabular se puede ver que estos no son los modelos que mejor se ajustan a los datos. El valor de `AIC` para cada modelo también muestra que el mejor modelo es el `modg`.
+
+Se puede observar que en ambos modelos no se presenta una simetría, en cambio se ve una asimetría en la dispersión, por lo tanto se podría decir que ningunos de los dos modelos es el más indicado para este proyecto. 
+
+En los graficos tambien se pueden observar la homocedasticidad de los datos, ya que estos no varían mucho respecto a la media. 
+
+Otra  diferencias que se puede notar entre ambos modelos es que los residuales de nuestro modelo ajustado varían entre un poco menos de $-50$ y $150$, mientras que el modelo general varía entre aproximadamente $-50$ y $50$. 
+
+
+#Punto 4 {.tabset .tabset-fade .tabset-pills} 
+
+##4.1
+
+***Compare dasométricamente los modelos  `v=f(dap) y v=f(dap,alt)`***
+
+Inicialmente se debe hacer un análisis exploratorio con el fin de saber si la relación del $dap$ contra $vol$ y $alt$ contra volumen era lineal o no lineal. 
+En las **fig.1** y **fig.2** se puede notar la tendencia lineal que siguen los datos, además que a medida que aumenta el $dap$ y la $alt$, aumenta el $vol$.
+
+```{r}
+library(tidyverse)
+datos2<- read.table("volu.txt")
+
+datos2<- datos2 %>% rename(d= V1, vol= V2, alt= V3)
+```
+
+```{r, fig.cap= "**fig.1**     volumen en funcion del diametro"}
+ggplot(datos2, mapping = aes(x = d, y = vol)) +
+  geom_point() + theme_classic()
+```
+
+
+```{r, fig.cap= "**fig.2**     volumen en funcion de la alt"}
+ggplot(datos2, mapping = aes(x = alt, y = vol)) +
+  geom_point() + theme_classic()
+```
+
+Mediante la regresión lineal se crearon dos modelos: `m1=lm(vol~d) y m2=lm(vol~d^2*alt)`con el `anova` se pudo observar que ambos modelos eran significativos.
+
+Para escoger un mejor modelo entre ellos dos se compara el AIC de cada una y el RSE, así como el sesgo e incertidumbre, que se halla con la fórmula:
+
+$$E\%= 100*\frac{Estimado-Observado}{Observado}$$ 
+
+El resumen de los modelos se presenta en la siguiente tabla: 
+
+```{r eval=FALSE, include=TRUE}
+mod1<-lm(vol~d,data=datos2)
+summary(mod1)
+anova(mod1)
+summary(mod1)
+AIC(mod1)
+shapiro.test(residuals(mod1))
+
+predm1=predict(mod1)
+error1=100*(predm1-datos3$vol)/datos3$vol
+mean(error1)
+sd(error1)
+```
+
+
+$Modelo$ | $F$ | $R^2$ | $shapiro.test$ | $RSE$ | $AIC$ | $\%Error$|
+---------|-----|-------|----------------|-------|-------|----------|
+$vol= -0.085+.012*dap$| $17.39^{***}$ | $0.5208$ | $p-valvue= 0.2021$ | $0.01511$ | $-95.95688$ | $9.9 \pm 39.2$|
+$vol= -2.84e^{-4}+2.678e^{-5}*(dap^2*alt)$| $17.33^{***}$| $0.52$ | $p-valvue= 0.2552$| $0.01513$| $-95.926993$| $10.21 \pm 40.38$
+
+De los modelos planteados no se puede decir a ciencia cierta cuál es el mejor modelo, puesto que tanto  el error estándar de los residuales con el AIC son muy similares y un criterio para escoger es la diferencia entre AIC mayores a 4 por lo que se podría decir que estos modelos son estadísticamente indiferenciables. Teniendo en cuanta eso, se evalúa el criterio del error, mostrando que el modelo 1 tiene un menor sesgo e incertidumbre  que el modelo 2, por lo que se podría decir que el primer modelo es más adecuado. 
+
+##4.2 
+
+***Haga una prueba teórica de bondad de ajuste al primer modelo***
+
+La prueba de bondad de ajuste permite establecer si el modelo se ajusta bien a los datos, para este caso, se utilizó el criterio de la suma de cuadrados de los residuales $(SSR)$ es bien sabido que si esta da como resultado $0$ la regresión se ajusta completamente a los datos, haciendo una análisis se encuentra este valor, para este caso fue de $0.0036546$ no es cero pero si es un valor pequeño, por lo cual el modelo ajustado es bueno. Para comprobar esto se miró el $R^2$ ajustado, el cual fue de: $0.4908 $ es un número positivo por lo cual es una asociación directa pero no es tan cercana a $1$, sin embargo, tampoco es cercana a $0$ lo que indicaría un ajuste moderado del modelo, apoyado en esto se puede decir que es un modelo aceptable.
+
+
+##4.3
+***Proponga un buen modelo con base en la última propuesta de 4.1***
+
+El modelo propuesto de `vol` en función de `dap` y `alt` fue el modelo exponencial $vol=b_0*dap^{b_1}*alt^{b_2}$. En la siguiente tabla se presentan los resultados de algunas pruebas de analisis para el modelo:
+
+$modelo$ | $AIC$ | $RSE$ | $shapiro.test$ | $\%Error$ |
+---------|-------|-------|----------------|-----------|
+$vol=0.0001*dap^{4.272}*alt^{-1.686}$ | $16.21643$ | $0.0148$ | $p-valvue= 0.4444$ | $10.65 \pm 34.34$|
+
+Como este es un modelo exponencial, que inicialmente se planteó como logarítmico, no se puede comparar con los dos modelos anteriores bajo el criterio del `AIC`, puesto que la variable dependiente está en distinta escala; sin embargo, se puede comparar el `RSE` y el `error`.
+
+
+
+
+
