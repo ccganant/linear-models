@@ -2,6 +2,7 @@
 title: "Modelación lineal"
 author: Cristian Gañan, Valentina Ruiz, Maria Isabel Vasquez, Tatiana Marin, Daniel Marin, Marlon Tejada
 date: ""
+<<<<<<< HEAD
 output: 
   word_document:
     df_print: kable
@@ -16,6 +17,16 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
 
 ## 1.1
 
+=======
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+  
+>>>>>>> fffea52af742d7d5cc44fc18bde965167cb941fc
 ```{r}
 library(tidyverse)
 datos<- read.table("Bosque_deg.txt")
@@ -23,6 +34,7 @@ datos<- datos %>% mutate(V1= as.numeric(V1), V2= as.numeric(V2),
                          V3= as.factor(V3),V4= as.numeric(V4),
                          V5= as.numeric(V5)) %>% 
   rename(dap= V1, Alt= V2, ps= V3, edad= V4, Vol= V5)
+<<<<<<< HEAD
 datos
 
 ```
@@ -566,6 +578,24 @@ $modelo$ | $AIC$ | $RSE$ | $shapiro.test$ | $\%Error$ |
 $vol=0.0001*dap^{4.272}*alt^{-1.686}$ | $16.21643$ | $0.0148$ | $p-valvue= 0.4444$ | $10.65 \pm 34.34$|
 
 Como este es un modelo exponencial, que inicialmente se planteó como logarítmico, no se puede comparar con los dos modelos anteriores bajo el criterio del `AIC`, puesto que la variable dependiente está en distinta escala; sin embargo, se puede comparar el `RSE` y el `error`.
+=======
+
+ggplot(datos, mapping = aes(x = dap, y = Alt+edad+Vol)) +
+  geom_point() + facet_wrap(~ps, nrow = 2)
+
+ggplot(datos, mapping = aes(x = dap+Alt, y = edad+Vol)) +
+  geom_point() + facet_wrap(~ps, nrow = 2)
+
+ggplot(datos, mapping = aes(x = dap, y = Alt+Vol)) +
+  geom_point() + facet_wrap(~ps, nrow = 2)
+
+```
+
+```{r}
+pairs(dap ~ Alt+Vol+edad, data = datos)
+```
+
+>>>>>>> fffea52af742d7d5cc44fc18bde965167cb941fc
 
 
 
